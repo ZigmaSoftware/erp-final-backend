@@ -6,9 +6,18 @@ import sys
 # Paths
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
+# __file__ = /home/sathya/erp/erp-final-backend/api_gateway/config/settings.py
+# .parent = /home/sathya/erp/erp-final-backend/api_gateway/config/
+# .parent = /home/sathya/erp/erp-final-backend/api_gateway/
+# BASE_DIR = /home/sathya/erp/erp-final-backend/api_gateway/
 
+PROJECT_ROOT = BASE_DIR.parent
+# .parent = /home/sathya/erp/erp-final-backend/
+# PROJECT_ROOT = /home/sathya/erp/erp-final-backend/
 
-COMMON_LIB = Path("/home/aakash/erp/erp-final-backend/common_lib")
+COMMON_LIB = PROJECT_ROOT / "common_lib"
+# COMMON_LIB = /home/sathya/erp/erp-final-backend/common_lib/
+
 if str(COMMON_LIB) not in sys.path:
     sys.path.insert(0, str(COMMON_LIB))
 
