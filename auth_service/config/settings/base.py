@@ -3,15 +3,27 @@ import os
 import sys
 
 # --------------------------------------------------
-# COMMON LIB PATH
-# --------------------------------------------------
-COMMON_LIB = Path("/home/sathya/erp/erp-final-backend/common_lib")
-sys.path.insert(0, str(COMMON_LIB))
-
-# --------------------------------------------------
 # BASE DIR
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+# __file__ = /home/sathya/erp/erp-final-backend/auth_service/config/settings/base.py
+# .parent = /home/sathya/erp/erp-final-backend/auth_service/config/settings/
+# .parent = /home/sathya/erp/erp-final-backend/auth_service/config/
+# .parent = /home/sathya/erp/erp-final-backend/auth_service/
+# BASE_DIR = /home/sathya/erp/erp-final-backend/auth_service/
+
+# --------------------------------------------------
+# COMMON LIB PATH (auto-detect relative to project)
+# --------------------------------------------------
+PROJECT_ROOT = BASE_DIR.parent
+# .parent = /home/sathya/erp/erp-final-backend/
+# PROJECT_ROOT = /home/sathya/erp/erp-final-backend/
+
+COMMON_LIB = PROJECT_ROOT / "common_lib"
+# COMMON_LIB = /home/sathya/erp/erp-final-backend/common_lib/
+
+if str(COMMON_LIB) not in sys.path:
+    sys.path.insert(0, str(COMMON_LIB))
 
 # --------------------------------------------------
 # SECURITY
