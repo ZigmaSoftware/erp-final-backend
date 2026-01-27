@@ -11,12 +11,13 @@ class Country(BaseMaster):
         Continent,
         on_delete=models.PROTECT,
         related_name="countries",
-        to_field="unique_id"
+        to_field="unique_id",
+        db_column="continent_id",
     )
 
     name = models.CharField(max_length=100)
-    currency = models.CharField(max_length=20, blank=True, null=True)
-    mob_code = models.CharField(max_length=5, blank=True, null=True)
+    currency = models.CharField(max_length=20, null=True)
+    mob_code = models.CharField(max_length=5, null=True)
 
     class Meta:
         ordering = ["name"]
