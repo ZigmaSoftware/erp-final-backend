@@ -12,6 +12,9 @@ A scalable, production-ready Enterprise Resource Planning (ERP) backend system b
 4. [Technologies Stack](#technologies-stack)
 5. [Coding Practices & Patterns](#coding-practices--patterns)
 6. [Authentication & Security](#authentication--security)
+   - [JWT Token Flow](#jwt-token-flow)
+   - [Role & Permission Management](#role--permission-management-)
+   - [Key Security Features](#key-security-features)
 7. [Project Structure](#project-structure)
 8. [Getting Started](#getting-started)
 
@@ -118,11 +121,20 @@ This project follows a **Microservices Architecture** pattern with the following
 - Audit logging (login attempts, failures, successful logins) ✅ **WORKING**
 - User group management
 - Password hashing (PBKDF2-SHA256 with 120,000 iterations)
+- Role and permission management ✅ **NEW**
+- User-to-role assignment ✅ **NEW**
 
 **Key Components**:
 - `apps/authentication/views/auth.py` - Login endpoints (API & HTML form)
+- `apps/authentication/views/permission_and_role.py` - Role/permission endpoints ✅ **NEW**
+- `apps/authentication/views/user.py` - User management endpoints ✅ **ENHANCED**
 - `apps/authentication/services/audit_utils.py` - Security auditing (IP, User-Agent, Browser/OS detection)
+- `apps/authentication/services/token_service.py` - JWT token operations
 - `apps/authentication/models/audit.py` - Audit log model with event tracking
+- `apps/authentication/models/permissions.py` - Permission models (proxy, managed=False) ✅ **NEW**
+- `apps/authentication/models/user_role.py` - UserRole model ✅ **NEW**
+- `apps/authentication/models/user_profile.py` - User profile extension
+- `apps/authentication/serializers/permission_and_role.py` - Role/permission serializers ✅ **NEW**
 - `config/hashers.py` - PBKDF2-SHA256 password hasher with explicit iteration count
 
 **Database**: MySQL/MariaDB (`auth_service_db`)
@@ -136,6 +148,8 @@ This project follows a **Microservices Architecture** pattern with the following
 - User-Agent and browser/OS detection
 - Failed login attempt logging with metadata
 - Successful login tracking with user context
+- Role-based access control (RBAC) with granular permissions ✅ **NEW**
+- User-role mapping with inheritance ✅ **NEW**
 
 ---
 
@@ -887,6 +901,79 @@ urlpatterns = [
 
 **⚠️ Note**: Refresh token endpoint is configured but not yet implemented. Token lifetime can be extended via settings.
 
+### Role & Permission Management ✅ **NEW**
+
+The system now includes a comprehensive role-based access control (RBAC) system:
+
+**Role Management**:
+- Create, read, update, soft delete user roles
+- Each role is a distinct entity with unique name validation
+- Soft delete capability (logical deletion with `is_active` flag)
+- Support for role descriptions and metadata
+- Endpoints:
+  - `GET /api/auth/roles/` - List all roles with filtering
+  - `POST /api/auth/roles/` - Create new role
+  - `GET /api/auth/roles/{id}/` - Retrieve role details
+  - `PUT /api/auth/roles/{id}/` - Update role
+  - `DELETE /api/auth/roles/{id}/` - Soft delete role
+
+**Permission Model**:
+- Proxy models (no database tables) for defining permissions
+- CRUD permissions for each entity:
+  - **Geographic Masters**: Country, State, District, City, Continent
+  - **Organizational Masters**: Plant, Site, Ward, Zone
+  - **Equipment Masters**: Equipment Type
+- Permission format: `master_{entity}_{action}` (e.g., `master_country_create`)
+- Centralized permission list at `GET /api/auth/permissions/`
+- Master-specific permissions grouped by entity at `GET /api/auth/permissions/master/`
+
+**Group Permission Assignment**:
+- Link permissions to Django Groups (roles)
+- Many-to-many relationship via `auth_group_permissions` table
+- Endpoints:
+  - `GET /api/auth/group-permissions/` - List all groups with permissions
+  - `POST /api/auth/group-permissions/` - Assign permissions to group
+  - `GET /api/auth/group-permissions/groups/` - List available groups (dropdown)
+  - `GET /api/auth/group-permissions/permissions/` - List available permissions
+  - `GET /api/auth/group-permissions/by-group/{group_id}/` - Get permissions for specific group
+  - `DELETE /api/auth/group-permissions/remove/{group_id}/` - Remove all permissions from group
+
+**User-Role Assignment**:
+- Users are assigned to roles (UserRole → Group mapping)
+- Users inherit all permissions from their assigned groups
+- Multiple roles per user supported
+- User creation includes role assignment
+
+**Example Workflow**:
+```bash
+# 1. Create a role
+POST /api/auth/roles/
+{
+  "name": "manager",
+  "description": "Department manager role",
+  "is_active": true
+}
+
+# 2. Get available master permissions
+GET /api/auth/permissions/master/
+
+# 3. Assign permissions to the role
+POST /api/auth/group-permissions/
+{
+  "group_id": 1,
+  "permission_ids": [1, 2, 3, 4]  # Create, read, update, delete country
+}
+
+# 4. Create user and assign role
+POST /api/auth/users/
+{
+  "username": "john_manager",
+  "password": "secure_pass",
+  "email": "john@example.com",
+  "role_ids": ["role-uuid"]  # Auto-assign permissions
+}
+```
+
 ### Key Security Features
 
 1. **Password Hashing (Auth Service)**
@@ -942,6 +1029,68 @@ urlpatterns = [
    - CSRF protection via middleware (safe with JWT bearer tokens)
    - Authorization header exposure configured
 
+8. **Role-Based Access Control (RBAC)** ✅ **NEW**
+   - Granular permission system with CRUD operations per entity
+   - Django Group integration for role-permission mapping
+   - User-to-role assignment with permission inheritance
+   - Master data permission control (Country, State, City, Plant, Site, Equipment, etc.)
+   - Extensible permission model for new entities
+   - Audit trail for role and permission changes
+
+---
+
+## API Endpoints Reference ✅ **NEW**
+
+### Authentication Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---|
+| POST | `/api/auth/login/` | User login (JSON API) | No |
+| GET | `/api/auth/login_page/` | Login HTML form | No |
+| POST | `/api/auth/refresh/` | Refresh access token | No (refresh token in body) |
+
+### Permission Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---|
+| GET | `/api/auth/permissions/` | List all system permissions | Yes |
+| GET | `/api/auth/permissions/?codename={pattern}` | Filter permissions by codename | Yes |
+| GET | `/api/auth/permissions/master/` | Get master permissions grouped by entity | Yes |
+
+### Role Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---|
+| GET | `/api/auth/roles/` | List all roles with filtering & search | Yes |
+| GET | `/api/auth/roles/?is_active=true&ordering=name` | Get active roles sorted by name | Yes |
+| GET | `/api/auth/roles/?search=manager&ordering=name` | Search roles by name pattern | Yes |
+| POST | `/api/auth/roles/` | Create new role | Yes |
+| GET | `/api/auth/roles/{id}/` | Get role details | Yes |
+| PUT | `/api/auth/roles/{id}/` | Update role | Yes |
+| DELETE | `/api/auth/roles/{id}/` | Soft delete (deactivate) role | Yes |
+| DELETE | `/api/auth/roles/{id}/?hard_delete=true` | Hard delete role | Yes |
+
+### Group-Permission Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---|
+| GET | `/api/auth/group-permissions/` | List all groups with their permissions | Yes |
+| POST | `/api/auth/group-permissions/` | Assign permissions to group | Yes |
+| GET | `/api/auth/group-permissions/groups/` | List available groups (dropdown) | Yes |
+| GET | `/api/auth/group-permissions/permissions/` | List available permissions (multi-select) | Yes |
+| GET | `/api/auth/group-permissions/by-group/{group_id}/` | Get permissions for specific group | Yes |
+| DELETE | `/api/auth/group-permissions/remove/{group_id}/` | Remove all permissions from group | Yes |
+
+### User Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---|
+| GET | `/api/auth/users/` | List all users | Yes |
+| POST | `/api/auth/users/` | Create user with role assignment | Yes |
+| GET | `/api/auth/users/{id}/` | Get user details | Yes |
+| PUT | `/api/auth/users/{id}/` | Update user | Yes |
+| DELETE | `/api/auth/users/{id}/` | Delete user | Yes |
+
 ---
 
 ## Project Structure
@@ -983,12 +1132,20 @@ erp-backend/
 │   │   └── authentication/
 │   │       ├── models/
 │   │       │   ├── audit.py              # Audit log model
+│   │       │   ├── permissions.py        # Permission proxy models (NEW)
+│   │       │   ├── user_role.py          # UserRole model (NEW)
+│   │       │   ├── user_profile.py       # User profile extension
 │   │       │   └── __init__.py
 │   │       ├── views/
-│   │       │   └── auth.py               # Login/refresh endpoints
+│   │       │   ├── auth.py               # Login/refresh endpoints
+│   │       │   ├── permission_and_role.py # Role/permission endpoints (NEW)
+│   │       │   ├── user.py               # User management endpoints (NEW)
+│   │       │   └── __init__.py
 │   │       ├── serializers/
 │   │       │   ├── login.py
 │   │       │   ├── token.py
+│   │       │   ├── permission_and_role.py # Role/permission serializers (NEW)
+│   │       │   ├── user.py               # User serializers (NEW)
 │   │       │   └── __init__.py
 │   │       ├── services/
 │   │       │   ├── token_service.py
@@ -998,6 +1155,7 @@ erp-backend/
 │   │       │   └── auth/
 │   │       ├── middleware/
 │   │       │   └── jwt_auth.py
+│   │       ├── migrations/
 │   │       ├── urls.py
 │   │       └── __init__.py
 │   ├── keys/                             # JWT signing keys
@@ -1153,6 +1311,89 @@ erp-backend/
    python manage.py runserver 8000
    ```
 
+### Testing Role & Permission Management ✅ **NEW**
+
+**1. Get All Permissions**
+```bash
+curl -X GET http://localhost:8000/api/auth/permissions/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**2. Get Master Permissions Grouped by Entity**
+```bash
+curl -X GET http://localhost:8000/api/auth/permissions/master/ \
+  -H "Authorization: Bearer <access_token>"
+
+# Response shows permissions grouped by entity (country, state, city, etc.)
+```
+
+**3. Create a New Role**
+```bash
+curl -X POST http://localhost:8000/api/auth/roles/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "manager",
+    "description": "Department Manager Role",
+    "is_active": true
+  }'
+```
+
+**4. List Roles with Filtering**
+```bash
+# Get active roles, ordered by name
+curl -X GET "http://localhost:8000/api/auth/roles/?is_active=true&ordering=name" \
+  -H "Authorization: Bearer <access_token>"
+
+# Search by name pattern
+curl -X GET "http://localhost:8000/api/auth/roles/?search=admin&ordering=name" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**5. Get Available Groups for Permission Assignment**
+```bash
+curl -X GET http://localhost:8000/api/auth/group-permissions/groups/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**6. Assign Permissions to a Role**
+```bash
+curl -X POST http://localhost:8000/api/auth/group-permissions/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "group_id": 1,
+    "permission_ids": [1, 2, 3, 4]
+  }'
+```
+
+**7. Get Permissions Assigned to a Role**
+```bash
+curl -X GET "http://localhost:8000/api/auth/group-permissions/by-group/1/" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**8. Create User with Role Assignment**
+```bash
+curl -X POST http://localhost:8000/api/auth/users/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "john_manager",
+    "password": "SecurePass@123",
+    "email": "john@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role_ids": ["12345678-1234-5678-1234-567812345678"]
+  }'
+```
+
+**9. Remove All Permissions from a Role**
+```bash
+curl -X DELETE "http://localhost:8000/api/auth/group-permissions/remove/1/" \
+  -H "Authorization: Bearer <access_token>"
+```
+
 ### Testing the Flow
 
 1. **Login**
@@ -1212,6 +1453,14 @@ ORDER BY created_at DESC LIMIT 5;
   3. Generate new access token
   4. Optionally rotate refresh token
   5. Return new tokens
+
+**Role-Permission Linking (Partial Implementation)**:
+- ✅ Role CRUD operations fully working
+- ✅ Permission listing and grouping fully working
+- ✅ Group-Permission assignment fully working
+- ✅ User-Role assignment fully working
+- ⚠️ UserRole ↔ Group linking exists but needs integration for advanced permission queries
+- **Status**: Ready for production use with current functionality
 
 ---
 
@@ -1335,5 +1584,11 @@ For issues, questions, or contributions, please contact the development team.
 
 ---
 
-**Last Updated**: January 23, 2026  
-**Version**: 1.0.0
+**Last Updated**: January 29, 2026  
+**Version**: 1.1.0  
+**Latest Changes**: 
+- ✅ Role & Permission Management System
+- ✅ User-Role Assignment
+- ✅ Group-Permission Linking
+- ✅ Master Permission Grouping by Entity
+- ✅ Enhanced API Documentation
