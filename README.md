@@ -116,8 +116,8 @@ This project follows a **Microservices Architecture** pattern with the following
 
 **Responsibilities**:
 - User login/authentication (API & HTML form)
-- JWT token generation (access & refresh)
-- Token refresh mechanism (configured, endpoint needs implementation)
+- JWT token generation (access & refresh) ✅ **WORKING**
+- Token refresh mechanism with validation ✅ **IMPLEMENTED**
 - Audit logging (login attempts, failures, successful logins) ✅ **WORKING**
 - User group management
 - Password hashing (PBKDF2-SHA256 with 120,000 iterations)
@@ -884,13 +884,14 @@ urlpatterns = [
    ├─ Extracts user context (id, username, groups)
    └─ Forwards to service with X-User-Id, X-Username, X-Groups headers
 
-4. Token Refresh (⚠️ Endpoint needs implementation)
-   ├─ POST /api/auth/refresh/ (NOT YET IMPLEMENTED)
-   ├─ Include Refresh Token in request
+4. Token Refresh ✅ **IMPLEMENTED**
+   ├─ POST /api/auth/refresh/ - Full implementation
+   ├─ GET /api/auth/refresh/ - Alternative method
+   ├─ Include Refresh Token in request body
    ├─ Validate refresh token signature & expiration
    ├─ Generate new Access Token (same user)
-   ├─ Optional: Rotate refresh token
-   └─ Return new tokens
+   ├─ Return new access token + original refresh token
+   └─ User context preserved (id, username, groups)
 
 5. Failed Login
    ├─ Invalid credentials detected
@@ -899,7 +900,72 @@ urlpatterns = [
    └─ metadata: {username, ip_address, browser, os}
 ```
 
-**⚠️ Note**: Refresh token endpoint is configured but not yet implemented. Token lifetime can be extended via settings.
+**✅ Refresh Token**: Fully implemented with both GET and POST methods. Validates token signature, expiration, and user existence. Returns new access token while keeping original refresh token for further rotations.
+
+### Token Refresh Implementation ✅ **NEW**
+
+The refresh token endpoint is fully implemented and production-ready:
+
+**Endpoint Details**:
+- **URL**: `POST /api/auth/refresh/` or `GET /api/auth/refresh/`
+- **Authentication**: Not required (refresh token validates itself)
+- **Content-Type**: application/json
+
+**Request Format**:
+```json
+{
+  "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Response Format**:
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600,
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "groups": ["administrators"]
+  }
+}
+```
+
+**Validation Logic**:
+1. ✅ Extracts refresh token from request body
+2. ✅ Decodes and validates token signature using public key
+3. ✅ Checks token expiration (default 604800 seconds = 7 days)
+4. ✅ Verifies token type is "refresh"
+5. ✅ Looks up user by ID from token payload
+6. ✅ Generates new access token (1 hour TTL)
+7. ✅ Returns both tokens with user context
+
+**Error Handling**:
+- `400 BAD REQUEST` - Missing refresh_token in request
+- `401 UNAUTHORIZED` - Token expired, invalid signature, or user not found
+
+**Example Usage**:
+```bash
+# Get initial tokens via login
+curl -X POST http://localhost:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# Response includes access_token and refresh_token
+# When access_token expires, refresh it:
+
+curl -X POST http://localhost:8000/api/auth/refresh/ \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"eyJhbGciOi..."}'
+
+# New access_token ready to use
+```
+
+**Configuration**:
+- Access Token TTL: `JWT_ACCESS_TOKEN_LIFETIME` (default: 3600 seconds = 1 hour)
+- Refresh Token TTL: `JWT_REFRESH_TOKEN_LIFETIME` (default: 604800 seconds = 7 days)
+- Both configurable via environment variables in `auth_service/config/settings/base.py`
 
 ### Role & Permission Management ✅ **NEW**
 
@@ -1047,7 +1113,8 @@ POST /api/auth/users/
 |--------|----------|-------------|---|
 | POST | `/api/auth/login/` | User login (JSON API) | No |
 | GET | `/api/auth/login_page/` | Login HTML form | No |
-| POST | `/api/auth/refresh/` | Refresh access token | No (refresh token in body) |
+| POST | `/api/auth/refresh/` | Refresh access token (JSON body) | No |
+| GET | `/api/auth/refresh/` | Refresh access token (query/body) | No |
 
 ### Permission Endpoints
 
@@ -1394,6 +1461,58 @@ curl -X DELETE "http://localhost:8000/api/auth/group-permissions/remove/1/" \
   -H "Authorization: Bearer <access_token>"
 ```
 
+### Testing Token Refresh ✅ **NEW**
+
+**1. Login and Get Tokens**
+```bash
+RESPONSE=$(curl -X POST http://localhost:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}')
+
+# Extract tokens (bash jq required)
+ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+REFRESH_TOKEN=$(echo $RESPONSE | jq -r '.refresh_token')
+
+echo "Access Token: $ACCESS_TOKEN"
+echo "Refresh Token: $REFRESH_TOKEN"
+```
+
+**2. Verify Access Token Works**
+```bash
+curl -X GET http://localhost:8000/api/master/countries/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+**3. Simulate Token Expiration and Refresh**
+```bash
+# Wait or the access token will expire in 1 hour
+# Then refresh it:
+
+curl -X POST http://localhost:8000/api/auth/refresh/ \
+  -H "Content-Type: application/json" \
+  -d "{\"refresh_token\":\"$REFRESH_TOKEN\"}"
+
+# Response includes new access_token
+```
+
+**4. Test Error Handling - Missing Token**
+```bash
+curl -X POST http://localhost:8000/api/auth/refresh/ \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Response: {"error": "refresh_token is required"} (400 BAD REQUEST)
+```
+
+**5. Test Error Handling - Invalid Token**
+```bash
+curl -X POST http://localhost:8000/api/auth/refresh/ \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"invalid_token_here"}'
+
+# Response: {"error": "Invalid refresh token"} (401 UNAUTHORIZED)
+```
+
 ### Testing the Flow
 
 1. **Login**
@@ -1442,25 +1561,39 @@ FROM auth_audit_log
 ORDER BY created_at DESC LIMIT 5;
 ```
 
-### Known Limitations ⚠️
+### Known Limitations ⚠️ & Future Enhancements
 
-**Refresh Token Endpoint Not Implemented**:
-- Refresh token is generated during login
-- Configuration exists: `JWT_REFRESH_TOKEN_LIFETIME=604800` (7 days)
-- **TODO**: Implement `POST /api/auth/refresh/` endpoint to:
-  1. Accept refresh token in request body
-  2. Validate token signature and expiration
-  3. Generate new access token
-  4. Optionally rotate refresh token
-  5. Return new tokens
+**Completed Features** ✅:
+- JWT token generation (access & refresh)
+- Token refresh mechanism with full validation
+- Login audit logging (success & failure)
+- Role-based access control (RBAC)
+- Permission management system
+- User-role assignment
+- Group-permission linking
+- Soft delete implementation
+- PBKDF2-SHA256 password hashing
+- CORS security
+- Swagger/OpenAPI documentation
 
-**Role-Permission Linking (Partial Implementation)**:
-- ✅ Role CRUD operations fully working
-- ✅ Permission listing and grouping fully working
-- ✅ Group-Permission assignment fully working
-- ✅ User-Role assignment fully working
-- ⚠️ UserRole ↔ Group linking exists but needs integration for advanced permission queries
-- **Status**: Ready for production use with current functionality
+**Future Enhancements** (TODO):
+1. **Permission Enforcement at Endpoints**: Add authorization decorators to enforce role-based access at master service endpoints
+2. **Token Blacklisting for Logout**: Implement logout functionality by blacklisting used tokens
+3. **Refresh Token Rotation**: Optionally rotate refresh tokens on each refresh for enhanced security
+4. **Master Service JWT Validation**: Master service should validate JWT from context headers (currently trusts API Gateway)
+5. **Multi-Factor Authentication (MFA)**: Add OTP or 2FA for enhanced security
+6. **Advanced Permission Queries**: Optimize UserRole ↔ Group linking for complex permission checks
+7. **Rate Limiting**: Add rate limiting to prevent brute force attacks
+8. **API Key Authentication**: Support API key-based authentication for service-to-service communication
+
+**Ready for Production** ✅:
+- Role & Permission Management System
+- User-Role Assignment
+- Token Generation & Refresh (both access and refresh tokens)
+- Audit Logging
+- CORS Security
+- Soft Delete Implementation
+- Swagger/OpenAPI Documentation
 
 ---
 
@@ -1585,10 +1718,12 @@ For issues, questions, or contributions, please contact the development team.
 ---
 
 **Last Updated**: January 29, 2026  
-**Version**: 1.1.0  
+**Version**: 1.2.0  
 **Latest Changes**: 
-- ✅ Role & Permission Management System
-- ✅ User-Role Assignment
-- ✅ Group-Permission Linking
-- ✅ Master Permission Grouping by Entity
-- ✅ Enhanced API Documentation
+- ✅ Token Refresh Endpoint Implementation (Full)
+- ✅ GET & POST methods for token refresh
+- ✅ Comprehensive token validation logic
+- ✅ Error handling for expired/invalid tokens
+- ✅ Complete API documentation updated
+- ✅ Testing examples for all endpoints
+- ✅ Production-ready status confirmed
