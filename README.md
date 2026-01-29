@@ -17,6 +17,11 @@ A scalable, production-ready Enterprise Resource Planning (ERP) backend system b
    - [Key Security Features](#key-security-features)
 7. [Project Structure](#project-structure)
 8. [Getting Started](#getting-started)
+9. [API Documentation Guide](#api-documentation-guide--swagger--redoc)
+10. [Logging & Monitoring](#logging--monitoring)
+11. [Contributing](#contributing)
+12. [Troubleshooting](#troubleshooting)
+13. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -831,9 +836,31 @@ python manage.py runserver
 
 ---
 
-### 10. **Documentation**
+### 10. **Documentation** ✅ **Interactive API Docs**
 
-**API Documentation with drf-yasg**:
+**API Documentation with drf-yasg (Swagger & ReDoc)**:
+
+The system provides **two powerful ways** to explore and understand the API:
+
+#### **Swagger UI - Interactive Testing** 🎯
+- Best for: Testing API endpoints directly from the browser
+- Features: Try-it-out button, request/response visualization, parameter exploration
+- Format: Human-friendly UI with interactive forms
+- Use case: Quick testing, learning endpoints, debugging
+
+#### **ReDoc - Beautiful Documentation** 📖
+- Best for: Reading comprehensive API documentation
+- Features: Clean, searchable, organized by tags, excellent for understanding specs
+- Format: Markdown-based, right-side response examples
+- Use case: Understanding API design, exploring data models, onboarding new developers
+- Why useful:
+  - ✅ Cleaner visual layout than Swagger
+  - ✅ Better for mobile/tablet viewing
+  - ✅ Excellent for learning API structure
+  - ✅ Searchable documentation
+  - ✅ Download OpenAPI spec option
+  - ✅ Perfect for sharing with non-technical stakeholders
+
 ```python
 # config/urls.py
 schema_view = get_schema_view(
@@ -847,12 +874,38 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    path("api/docs/swagger/", schema_view.with_ui("swagger")),
-    path("api/docs/redoc/", schema_view.with_ui("redoc")),
+    path("api/docs/swagger/", schema_view.with_ui("swagger")),  # Interactive testing
+    path("api/docs/redoc/", schema_view.with_ui("redoc")),      # Beautiful docs
+    path("api/docs/schema.json", schema_view.without_ui(...)),   # Raw OpenAPI spec
 ]
 ```
 
-**Auto-generated OpenAPI schema** at `/api/docs/schema.json`
+**Available Endpoints** (All services):
+
+| Service | Swagger UI | ReDoc | OpenAPI Schema |
+|---------|-----------|-------|---|
+| **Auth Service** (8001) | [http://localhost:8001/swagger/](http://localhost:8001/swagger/) | [http://localhost:8001/redoc/](http://localhost:8001/redoc/) | [http://localhost:8001/swagger.json](http://localhost:8001/swagger.json) |
+| **Master Service** (8002) | [http://localhost:8002/api/docs/swagger/](http://localhost:8002/api/docs/swagger/) | [http://localhost:8002/api/docs/redoc/](http://localhost:8002/api/docs/redoc/) | [http://localhost:8002/api/docs/schema.json](http://localhost:8002/api/docs/schema.json) |
+| **API Gateway** (8000) | ⚠️ No docs | ⚠️ No docs | Routes to auth/master services |
+
+**Quick Links for Development**:
+```
+Authentication Service:
+  Swagger:  http://0.0.0.0:8001/swagger/ or http://127.0.0.1:8001/swagger/
+  ReDoc:    http://0.0.0.0:8001/redoc/ or http://127.0.0.1:8001/redoc/
+
+Master Data Service:
+  Swagger:  http://0.0.0.0:8002/api/docs/swagger/ or http://127.0.0.1:8002/api/docs/swagger/
+  ReDoc:    http://0.0.0.0:8002/api/docs/redoc/ or http://127.0.0.1:8002/api/docs/redoc/
+```
+
+**How to Use ReDoc for Documentation**:
+1. Open ReDoc in your browser
+2. Use the search feature (Ctrl+F) to find specific endpoints
+3. Click on endpoint to see full details: method, parameters, request body, response
+4. View request/response examples on the right side
+5. Understand data models and relationships
+6. Download/export OpenAPI specification for external tools
 
 ---
 
@@ -1528,9 +1581,30 @@ curl -X POST http://localhost:8000/api/auth/refresh/ \
      -H "Authorization: Bearer <access_token>"
    ```
 
-3. **Access API Documentation**
-   - Swagger: http://localhost:8002/api/docs/swagger/
-   - ReDoc: http://localhost:8002/api/docs/redoc/
+3. **Access Interactive API Documentation** ✅
+   
+   Choose your preferred documentation style:
+   
+   **Option A: Swagger UI** (Interactive Testing)
+   - Auth Service: http://localhost:8001/swagger/
+   - Master Service: http://localhost:8002/api/docs/swagger/
+   - Features: Try-out buttons, request/response visualization, parameter forms
+   
+   **Option B: ReDoc** (Beautiful Documentation) 📖 *Recommended for learning*
+   - Auth Service: http://localhost:8001/redoc/
+   - Master Service: http://localhost:8002/api/docs/redoc/
+   - Features: Cleaner layout, searchable, excellent for understanding API design, mobile-friendly
+   - Why use ReDoc:
+     - ✅ Better organized and easier to navigate
+     - ✅ Perfect for reading comprehensive documentation
+     - ✅ Excellent for onboarding new developers
+     - ✅ Mobile/tablet friendly
+     - ✅ Search functionality for finding endpoints
+   
+   **Option C: Raw OpenAPI Schema**
+   - Auth Service: http://localhost:8001/swagger.json
+   - Master Service: http://localhost:8002/api/docs/schema.json
+   - Use for: Importing into Postman, code generation, external tools
 
 ### Testing Audit Logging
 
@@ -1560,6 +1634,147 @@ SELECT event_type, user_id, ip_address, browser, os, created_at
 FROM auth_audit_log 
 ORDER BY created_at DESC LIMIT 5;
 ```
+
+---
+
+## API Documentation Guide ✅ **Swagger & ReDoc**
+
+### Why Two Documentation Formats?
+
+**Swagger UI** and **ReDoc** serve different purposes and audiences:
+
+| Feature | Swagger UI | ReDoc |
+|---------|-----------|-------|
+| **Purpose** | Interactive testing | Reading documentation |
+| **Best For** | Developers testing APIs | Understanding API design |
+| **UI Style** | Form-based, detailed controls | Clean, markdown-based |
+| **Testing** | ✅ Try-it-out buttons | ❌ No direct testing |
+| **Mobile** | ⚠️ Decent | ✅ Excellent |
+| **Learning Curve** | Steep with complex specs | Gentle, intuitive |
+| **Search** | ⚠️ Limited | ✅ Fast search |
+| **Data Models** | Mixed with endpoints | Organized separately |
+| **Share with Non-Devs** | ❌ Too technical | ✅ Perfect |
+
+### Using ReDoc for Documentation 📖
+
+**Why ReDoc is excellent for understanding the API**:
+
+1. **Clean Visual Layout**
+   - Endpoints on left, description in center, examples on right
+   - No cluttered forms or input fields
+   - Perfect for reading specifications
+
+2. **Searchable Documentation**
+   - Ctrl+F to find endpoints quickly
+   - Search by endpoint name, parameter, or description
+   - Perfect for large APIs with 50+ endpoints
+
+3. **Organized by Tags**
+   - Endpoints grouped by feature (Auth, Roles, Permissions, etc.)
+   - Easy to navigate related functionality
+   - Understand API architecture at a glance
+
+4. **Excellent Request/Response Examples**
+   - Real-world example on right side
+   - Shows request body and response
+   - Learn by example
+
+5. **Mobile-Friendly**
+   - Perfect on tablets, phones, or small screens
+   - No scrolling complex forms
+   - Share on any device
+
+6. **Perfect for Onboarding**
+   - Non-technical stakeholders can understand API
+   - Product managers see what's available
+   - New developers learn structure quickly
+
+7. **Download & Share**
+   - Export OpenAPI specification
+   - Use for code generation
+   - Import into Postman/Insomnia
+
+### Quick Comparison: When to Use What
+
+**Use Swagger UI when you want to**:
+- ✅ Test an endpoint immediately
+- ✅ Send actual requests and see responses
+- ✅ Debug API behavior
+- ✅ Experiment with parameters
+- ✅ Verify authentication works
+
+**Use ReDoc when you want to**:
+- ✅ Understand API structure
+- ✅ Learn endpoint details
+- ✅ Find a specific endpoint
+- ✅ Read comprehensive documentation
+- ✅ Onboard new team members
+- ✅ Share with non-developers
+- ✅ Plan API integration
+
+### All Documentation Endpoints
+
+**Auth Service (Port 8001)**:
+```
+Interactive Testing:
+  POST   /swagger/                    (Swagger UI - try endpoints)
+
+Beautiful Documentation:
+  GET    /redoc/                      (ReDoc - read docs)
+
+Raw Specification:
+  GET    /swagger.json                (OpenAPI JSON format)
+  GET    /swagger.yaml                (OpenAPI YAML format)
+```
+
+**Master Service (Port 8002)**:
+```
+Interactive Testing:
+  GET    /api/docs/swagger/           (Swagger UI - try endpoints)
+
+Beautiful Documentation:
+  GET    /api/docs/redoc/             (ReDoc - read docs)
+
+Raw Specification:
+  GET    /api/docs/schema.json        (OpenAPI JSON format)
+  GET    /api/docs/schema.yaml        (OpenAPI YAML format)
+```
+
+### Accessing Documentation
+
+**In Browser** (Recommended):
+```
+# Auth Service ReDoc
+http://localhost:8001/redoc/
+
+# Master Service ReDoc
+http://localhost:8002/api/docs/redoc/
+
+# Or use IP address
+http://0.0.0.0:8001/redoc/
+http://0.0.0.0:8002/api/docs/redoc/
+```
+
+**In Terminal** (Get raw spec):
+```bash
+# Get OpenAPI JSON
+curl http://localhost:8001/swagger.json | jq
+
+# Get OpenAPI YAML
+curl http://localhost:8001/swagger.yaml
+
+# Save for external tools
+curl http://localhost:8002/api/docs/schema.json > openapi.json
+```
+
+**Import into Postman/Insomnia**:
+1. Open Postman/Insomnia
+2. Import → Link → Paste endpoint URL:
+   - `http://localhost:8001/swagger.json` (Auth Service)
+   - `http://localhost:8002/api/docs/schema.json` (Master Service)
+3. All endpoints auto-populate with descriptions, parameters, and examples
+
+---
 
 ### Known Limitations ⚠️ & Future Enhancements
 
@@ -1718,12 +1933,12 @@ For issues, questions, or contributions, please contact the development team.
 ---
 
 **Last Updated**: January 29, 2026  
-**Version**: 1.2.0  
+**Version**: 1.3.0  
 **Latest Changes**: 
+- ✅ Comprehensive API Documentation Guide (Swagger & ReDoc)
+- ✅ Detailed ReDoc explanation and use cases
+- ✅ All documentation endpoints documented
+- ✅ Comparison tables for Swagger vs ReDoc
+- ✅ Instructions for importing into Postman/Insomnia
 - ✅ Token Refresh Endpoint Implementation (Full)
-- ✅ GET & POST methods for token refresh
-- ✅ Comprehensive token validation logic
-- ✅ Error handling for expired/invalid tokens
-- ✅ Complete API documentation updated
-- ✅ Testing examples for all endpoints
-- ✅ Production-ready status confirmed
+- ✅ Complete token validation and error handling
