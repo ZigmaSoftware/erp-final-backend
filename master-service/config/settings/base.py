@@ -115,6 +115,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
+    # Global pagination: limit/offset style with page metadata, 20 items per page
+    "DEFAULT_PAGINATION_CLASS": "apps.common_master.pagination.LimitOffsetWithPage",
+    "PAGE_SIZE": 20,
 }
 
 # --------------------------------------------------
