@@ -115,6 +115,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
+    # Global pagination: limit/offset style with page metadata, 20 items per page
+    "DEFAULT_PAGINATION_CLASS": "apps.common_master.pagination.LimitOffsetWithPage",
+    "PAGE_SIZE": 20,
 }
 
 # --------------------------------------------------
@@ -130,6 +133,10 @@ JWT_PUBLIC_KEY_PATH = os.getenv(
     "JWT_PUBLIC_KEY_PATH",
     str(PROJECT_ROOT / "auth_service" / "keys" / "dev_public.pem"),
 )
+
+MEDIA_URL = '/uploads/'
+MEDIA_ROOT = BASE_DIR / 'uploads'
+
 
 # --------------------------------------------------
 # SWAGGER / OPENAPI (drf-yasg)
